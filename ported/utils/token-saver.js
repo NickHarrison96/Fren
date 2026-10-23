@@ -50,18 +50,28 @@ const GUIDANCE = {
 };
 
 const KEY = "anythingllm.tokenSaver";
+// Non-browser runtimes (Node test runner, SSR) don't expose localStorage, so fall
+// back to an in-memory store so defaults and per-thread settings still persist
+// across calls the same way the browser's localStorage does.
+const storage = typeof localStorage !== "undefined" ? localStorage : (() => {
+  const cache = {};
+  return {
+    getItem: (key) => (key in cache ? cache[key] : null),
+    setItem: (key, value) => { cache[key] = String(value); },
+  };
+})();
 export const REMIND_EVERY = 8;
 export const HEADER = "Response style (AnythingLLM token saver";
 
 function read() {
   try {
-    const value = JSON.parse(localStorage.getItem(KEY) ?? "null");
+    const value = JSON.parse(storage.getItem(KEY) ?? "null");
     if (value && typeof value === "object") return { defaults: value.defaults ?? null, threads: value.threads ?? {} };
   } catch { /* Start fresh. */ }
   return { defaults: null, threads: {} };
 }
 function write(store) {
-  try { localStorage.setItem(KEY, JSON.stringify(store)); } catch { /* This session keeps it. */ }
+  try { storage.setItem(KEY, JSON.stringify(store)); } catch { /* This session keeps it. */ }
 }
 const valid = (packs) => Array.isArray(packs) ? PACKS.map((pack) => pack.id).filter((id) => packs.includes(id)) : [];
 
