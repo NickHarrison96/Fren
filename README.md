@@ -27,11 +27,21 @@ All 8 Tier-1 modules converted to .js via esbuild, syntax-verified with node --c
 ## Remaining Tier 1
 (none — Tier 1 complete)
 
-## Tier 2 (not started)
-agent-input, subagents, skills-library, file-links, file-mentions, turn-changes, dom (shared)
+## Ported modules (Tier 2) — COMPLETE (6/6)
+
+| Module | Lines | Source | Ported file | Notes |
+|---|---|---|---|---|
+| turn-changes | 58 | `src/turn-changes.ts` | `ported/utils/turn-changes.js` | TS→JS via esbuild; depends on dom + tooltip |
+| skills-library | 191 | `src/skills-library.ts` | `ported/utils/skills-library.js` | TS→JS via esbuild; depends on dom (escape) |
+| file-links | 225 | `src/file-links.ts` | `ported/utils/file-links.js` | TS→JS via esbuild; pure logic (no imports) |
+| file-mentions | 236 | `src/file-mentions.ts` | `ported/utils/file-mentions.js` | TS→JS via esbuild; depends on dom + popover-motion |
+| agent-input | 238 | `src/agent-input.ts` | `ported/utils/agent-input.js` | TS→JS via esbuild; depends on bridge + rich-markdown |
+| subagents | 280 | `src/subagents.ts` | `ported/utils/subagents.js` | TS→JS via esbuild; depends on bridge, dom, popover, streaming-markdown, file-links, tool-activity, message-actions |
+
+All Tier 2 modules converted to .js via esbuild, syntax-verified with node --check.
 
 ## Tier 3 (not portable — desktop/Tauri-specific)
 worktrees, vm-panel, simulator*, moodboards, github-hub, cloud-settings, terminal-panel, browser
 
 ## Status
-Resumed 2026-10-23. Tier 1 COMPLETE: 8/8 modules ported (all .js, lint-clean). Ready for Tier 2.
+Resumed 2026-10-23. Tier 1 COMPLETE (8/8) + Tier 2 COMPLETE (6/6) = 14 modules ported (all .js, lint-clean). Tier 3 not portable. Ready for integration/adaptation phase.
