@@ -1,10 +1,12 @@
-// PandaCode dom shim for AnythingLLM frontend.
-// Provides the minimal helpers the ported modules need. Stubs marked TODO.
+// PandaCode dom adapter for AnythingLLM frontend.
+// Provides the helpers ported modules need, backed by AnythingLLM's own utils.
 
 export function escape(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// Icon set (PandaCode SVG paths). AnythingLLM uses @phosphor-icons; these are
+// inline SVGs for the ported PandaCode UI. Keep as-is for visual parity.
 const ICONS = {
   file: '<path d="M5 3h9l5 5v13H5Z"/><path d="M14 3v6h5"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3Z"/>',
@@ -28,6 +30,9 @@ const ICONS = {
   edit: '<path d="m14 5 5 5M4 20l5-1L21 7l-5-5L4 14Z"/>',
   attach: '<path d="m8 13 7-7a3 3 0 0 1 4 4L9 20a5 5 0 0 1-7-7L13 2m-5 11 7-7"/>',
   spark: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
+  external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.01"/>',
 };
 export function icon(name, cls = "") {
   const path = ICONS[name] ?? ICONS.file;
@@ -38,9 +43,20 @@ export function fileIcon(name, isDir) {
   return icon(isDir ? "folder" : "file");
 }
 
-// TODO: wire to AnythingLLM's markdown renderer
+// Markdown rendering: delegate to AnythingLLM's purify util + a simple markdown-it pass.
+// TODO: replace with AnythingLLM's full markdown pipeline (highlight.js, etc.) when integrating.
+import DOMPurify from "@/utils/chat/purify";
+let _md = null;
+async function getMd() {
+  if (_md) return _md;
+  const { default: MarkdownIt } = await import("markdown-it");
+  _md = new MarkdownIt({ html: true, breaks: true });
+  return _md;
+}
 export async function markdownHtml(value) {
-  return value;
+  const md = await getMd();
+  const html = md.render(value ?? "");
+  return DOMPurify.sanitize(html);
 }
 
 export function $(selector) {
@@ -50,5 +66,5 @@ export function $(selector) {
 }
 
 export function morph(target, html, depth = 4) {
-  target.innerHTML = html;
+  if (target) target.innerHTML = html;
 }
