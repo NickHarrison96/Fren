@@ -1,0 +1,262 @@
+import "./settings.css";
+import { mountProviderReadiness } from "./provider-readiness";
+import { escape, icon } from "./dom";
+import { providerLogo } from "./provider-logos";
+import { uiSizeControls } from "./ui-size";
+import { mountOverlaySettings } from "./overlay-settings";
+import { mountSupportDetails } from "./support-settings";
+import { aboutSettingsHtml, mountAboutSettings } from "./about-settings";
+import { mountResourceUsage, resourceUsageHtml } from "./resource-usage-settings";
+import { colorsSummary } from "./theme-settings";
+import { mountAgentTeams } from "./agent-teams";
+import { mountCloudSettings } from "./cloud-settings";
+import { mountSkillsLibrary } from "./skills-library";
+import { call } from "./bridge";
+import { mount as mountCapabilities } from "./capabilities-panel";
+import { mountRemoteSettings } from "./remote-settings";
+const SECTIONS = [
+  { id: "general", label: "General", icon: "settings", description: "Text size, conversation density and the quick launcher." },
+  { id: "appearance", label: "Appearance", icon: "sun", description: "Theme, accent colors and wallpapers." },
+  { id: "agents", label: "Agents", icon: "bot", description: "Your default agent, installed agents and their models." },
+  { id: "providers", label: "Providers", icon: "server", description: "Connections for Claude Code, GitHub Copilot CLI, GLM, MiMo, OpenCode and Antigravity." },
+  { id: "teams", label: "Agent teams", icon: "grid", description: "Named teams of models, and the classic team setup." },
+  { id: "tools", label: "Tools & add-ons", icon: "widget", description: "App tools, MCP servers, skills and Jev." },
+  { id: "skills", label: "Skills & rules", icon: "widget", description: "Import skills and rules once, turn them on per harness, and check for drift." },
+  { id: "cloud", label: "Cloud sandboxes", icon: "globe", description: "Daytona, Cloudflare and AWS machines for your agents." },
+  { id: "remote", label: "Remote access", icon: "server", description: "Reach your other computers with PandaCode Connect, end-to-end encrypted." },
+  { id: "github", label: "GitHub", icon: "github", description: "Issues, pull requests and repositories through the GitHub CLI." },
+  { id: "about", label: "About & updates", icon: "info", description: "Version, updates, resource usage, license and support." }
+];
+const switchRow = (id, title, detail, checked) => `<div class="setting-row"><div><strong>${title}</strong><small>${detail}</small></div><input type="checkbox" class="settings-switch" id="${id}" aria-label="${title}" ${checked ? "checked" : ""}></div>`;
+function sectionHtml(id, options) {
+  const defaultName = options.providers.find((provider) => provider.id === options.defaultProvider)?.name ?? options.defaultProvider;
+  switch (id) {
+    case "general":
+      return `<div class="settings-group">${uiSizeControls()}${switchRow("compact-mode", "Compact conversation", "Less space between messages.", options.compact)}${switchRow("expand-tool-activity", "Expand tool activity", "Show grouped activity expanded by default.", options.activityExpanded)}</div>
+      <h3 class="settings-heading">Quick launcher</h3><div id="launcher-settings"></div>${options.projects ? '<h3 class="settings-heading">Projects</h3><div id="projects-settings" class="settings-group"></div>' : ""}`;
+    case "appearance":
+      return `<div class="settings-group">
+        <div class="setting-row"><div><strong>Theme</strong><small>${options.theme === "dark" ? "Dark" : "Light"}. Imported VS Code themes keep their own.</small></div><button type="button" class="secondary-button" data-action="toggle-theme">${icon(options.theme === "dark" ? "sun" : "moon")}Use ${options.theme === "dark" ? "light" : "dark"}</button></div>
+        <div class="setting-row"><div><strong>Daily wallpapers</strong><small>A new scene for each part of the day.</small></div><input type="checkbox" class="settings-switch" id="daily-wallpapers" aria-label="Daily wallpapers" ${options.wallpapers ? "checked" : ""}></div>
+      </div>
+      <h3 class="settings-heading">Colors <small class="settings-colors-summary">${escape(colorsSummary())}</small></h3><div class="settings-embed" data-embed="colors"></div>
+      <h3 class="settings-heading">Wallpapers</h3><div class="settings-embed" data-embed="wallpapers"></div>`;
+    case "agents":
+      return `<div class="settings-group">
+        <div class="setting-row settings-default-row"><div><strong>Default agent</strong><small>Used for new tasks.</small></div><button type="button" id="default-provider" class="settings-select" data-action="default-provider" aria-label="Default agent for new tasks" aria-haspopup="dialog" aria-expanded="false">${providerLogo(options.defaultProvider)}<span>${escape(defaultName)}</span>${icon("down")}</button></div>
+        <div class="setting-row settings-default-row"><div><strong>Default model</strong><small>Used for new tasks.</small></div><button type="button" id="default-model" class="settings-select" data-action="default-model" aria-label="Default model for new tasks" aria-haspopup="dialog" aria-expanded="false"><span>${escape(options.defaultModel)}</span>${icon("down")}</button></div>
+        <div class="setting-row"><div><strong>Agent updates</strong><small>Keep installed agents up to date.</small></div><button type="button" class="secondary-button" data-action="agent-updates" aria-haspopup="dialog">Check updates</button></div>
+        ${switchRow("turn-checks", "Project checks after turns", "When a turn ends, runs the project\u2019s own test or check command with your environment (your shell, PATH and credentials); a failure queues one fix.", options.turnChecks)}
+      </div>
+      <div class="settings-heading settings-agents-heading"><h3>Installed agents</h3><button type="button" class="settings-refresh">${icon("refresh")}Refresh agents</button></div>
+      <div class="settings-provider-status" role="status" hidden></div>
+      <div class="provider-diagnostics settings-group"></div>
+      ${options.preview ? '<p class="settings-preview-note">Browser preview \xB7 sample agent availability.</p>' : ""}
+      <h3 class="settings-heading">OpenCode models</h3><div class="settings-embed" data-embed="openCodeModels"></div>`;
+    case "providers":
+      return '<div class="settings-embed" data-embed="providerConnections"></div>';
+    case "teams":
+      return '<div id="agent-teams-settings"></div>';
+    case "tools":
+      return `<div class="settings-group">
+        <div class="setting-row"><div><strong>Tools & integrations</strong><small>App tools, MCP servers, and skills.</small></div><button type="button" class="secondary-button" data-action="agent-integrations">Manage</button></div>
+        <div class="setting-row"><div><strong>Jev \xB7 Optional add-on</strong><small>Browser tests and decision assistance. Your agents work without it.</small></div><button type="button" class="secondary-button" data-action="jev-settings">Set up Jev</button></div>
+      </div>
+      <div id="capabilities-settings"></div>`;
+    case "skills":
+      return '<div id="skills-library"></div>';
+    case "cloud":
+      return '<div id="cloud-settings"></div>';
+    case "remote":
+      return '<div id="remote-settings"></div>';
+    case "github":
+      return '<div id="github-settings"></div>';
+    case "about":
+      return `${aboutSettingsHtml()}${resourceUsageHtml()}
+      <div class="settings-group settings-support"><div class="setting-row"><div><strong>Help & support</strong><small>Open an issue on GitHub.</small></div><button type="button" class="secondary-button" data-action="support">Open issues${icon("forward")}</button></div><details class="support-details"><summary>App details for support</summary><p>Only the app version, platform, and architecture. Nothing is sent automatically.</p><textarea aria-label="App details for support" rows="3" readonly spellcheck="false"></textarea><div class="support-details-actions"><button type="button" class="secondary-button support-copy" disabled>${icon("copy")}Copy app details</button><button type="button" class="secondary-button support-retry" hidden>Try again</button></div><p role="status" aria-live="polite"></p></details></div>`;
+  }
+}
+function mountSettings(host, options) {
+  host.classList.add("settings-page-root");
+  host.innerHTML = `<nav class="settings-nav" aria-label="Settings sections">
+      <div class="settings-nav-head" data-tauri-drag-region><button type="button" class="settings-back" data-settings-close aria-label="Back to the workspace" title="Back (Esc)">${icon("back")}<span>Back</span></button></div>
+      <h1 class="settings-nav-title" data-tauri-drag-region>Settings</h1>
+      <div class="settings-nav-list" role="tablist" aria-orientation="vertical" aria-label="Settings">${SECTIONS.map((section) => `<button type="button" role="tab" id="settings-tab-${section.id}" data-section="${section.id}" aria-controls="settings-panel-${section.id}" aria-selected="false" tabindex="-1">${icon(section.icon)}<span>${section.label}</span></button>`).join("")}</div>
+    </nav>
+    <div class="settings-content">${SECTIONS.map((section) => `<section class="settings-panel" id="settings-panel-${section.id}" role="tabpanel" aria-labelledby="settings-tab-${section.id}" hidden><header class="settings-panel-head" data-tauri-drag-region><h2>${section.label}</h2><p>${section.description}</p></header><div class="settings-panel-body">${sectionHtml(section.id, options)}</div></section>`).join("")}</div>`;
+  const tabs = [...host.querySelectorAll('[role="tab"]')];
+  const panels = new Map(SECTIONS.map((section) => [section.id, host.querySelector(`#settings-panel-${section.id}`)]));
+  const cleanups = [];
+  const mounted = /* @__PURE__ */ new Set();
+  let disposed = false;
+  const list = host.querySelector(".provider-diagnostics");
+  const refreshButton = host.querySelector(".settings-refresh");
+  const status = host.querySelector(".settings-provider-status");
+  let pending = false, discovered = false;
+  const readinessCleanup = [];
+  const live = () => !disposed && host.isConnected && !host.hidden;
+  function updateProviders(providers) {
+    const rows = new Map(Array.from(list.querySelectorAll("details")).map((row) => [row.dataset.provider, row]));
+    for (const [index, provider] of providers.entries()) {
+      let row = rows.get(provider.id);
+      if (!row) {
+        row = document.createElement("details");
+        row.className = "provider-diagnostic";
+        row.dataset.provider = provider.id;
+        row.innerHTML = `<summary aria-label="${escape(provider.name)} details"><span class="provider-avatar ${provider.id}">${providerLogo(provider.id)}</span><strong></strong><span class="provider-availability"><span class="status-dot"></span><span class="settings-installed"></span></span>${icon("chevron")}</summary><div class="settings-provider-details"><span>Version</span><span class="settings-provider-version"></span><span>Location</span><code></code></div>`;
+      }
+      if (provider.id === "antigravity" && !row.querySelector(".provider-readiness")) {
+        const check = document.createElement("div");
+        row.append(check);
+        readinessCleanup.push(mountProviderReadiness(check));
+      }
+      row.querySelector("strong").textContent = provider.name;
+      row.querySelector("summary").setAttribute("aria-label", `${provider.name} details, ${provider.installed ? "Installed" : "Not installed"}`);
+      row.querySelector(".provider-availability").classList.toggle("available", provider.installed);
+      row.querySelector(".settings-installed").textContent = provider.installed ? provider.id === "antigravity" ? "ACP installed" : "Installed" : "Not installed";
+      row.querySelector(".settings-provider-version").textContent = provider.version || "Not reported";
+      row.querySelector("code").textContent = provider.path || "Install the agent, then refresh.";
+      if (list.children[index] !== row) list.insertBefore(row, list.children[index] ?? null);
+      rows.delete(provider.id);
+    }
+    rows.forEach((row) => row.remove());
+  }
+  async function refresh() {
+    if (!live() || pending) return;
+    pending = true;
+    refreshButton.disabled = true;
+    status.hidden = false;
+    status.textContent = "Checking agents\u2026";
+    try {
+      const providers = await options.discover();
+      if (!live()) return;
+      updateProviders(providers);
+      discovered = true;
+      status.textContent = "";
+      status.hidden = true;
+    } catch {
+      if (!live()) return;
+      status.textContent = "Couldn\u2019t check agents. Try refreshing again.";
+    } finally {
+      pending = false;
+      if (live()) refreshButton.disabled = false;
+    }
+  }
+  function mountProjects(slot, projects) {
+    let confirming = "", error = "";
+    const draw = () => {
+      const rows = projects.list();
+      slot.innerHTML = rows.length ? rows.map((project) => confirming === project.id ? `<div class="setting-row project-row" data-project="${escape(project.id)}"><div><strong>Remove ${escape(project.name)}?</strong><small>Its tasks are removed from PandaCode. The folder stays on disk.</small>${error ? `<small class="settings-embed-error" role="alert">${escape(error)}</small>` : ""}</div><div class="project-row-actions"><button type="button" class="secondary-button" data-project-cancel>Cancel</button><button type="button" class="secondary-button" data-project-confirm>Remove project</button></div></div>` : `<div class="setting-row project-row" data-project="${escape(project.id)}"><div><strong>${escape(project.name)}</strong><small class="project-path">${escape(project.path)}</small></div><button type="button" class="secondary-button" data-project-remove aria-label="Remove ${escape(project.name)}">Remove</button></div>`).join("") : '<div class="setting-row"><div><small>No projects yet.</small></div></div>';
+    };
+    const onClick = async (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const id = target?.closest("[data-project]")?.dataset.project;
+      if (!target || !id) return;
+      if (target.closest("[data-project-remove]")) {
+        confirming = id;
+        error = "";
+        draw();
+      } else if (target.closest("[data-project-cancel]")) {
+        confirming = "";
+        error = "";
+        draw();
+      } else if (target.closest("[data-project-confirm]")) {
+        const button = target.closest("button");
+        button.disabled = true;
+        try {
+          await projects.remove(id);
+          confirming = "";
+          error = "";
+        } catch (failure) {
+          error = failure instanceof Error ? failure.message : String(failure);
+        }
+        if (live()) draw();
+      }
+    };
+    slot.addEventListener("click", onClick);
+    draw();
+    return () => slot.removeEventListener("click", onClick);
+  }
+  function mountSection(id) {
+    if (mounted.has(id)) return;
+    mounted.add(id);
+    const panel = panels.get(id);
+    if (id === "general") cleanups.push(mountOverlaySettings(panel.querySelector("#launcher-settings")));
+    if (id === "remote" && options.remote) cleanups.push(mountRemoteSettings(panel.querySelector("#remote-settings"), options.remote));
+    if (id === "general" && options.projects) cleanups.push(mountProjects(panel.querySelector("#projects-settings"), options.projects));
+    if (id === "github" && options.github) cleanups.push(options.github(panel.querySelector("#github-settings")));
+    if (id === "teams" && options.teams) cleanups.push(mountAgentTeams(panel.querySelector("#agent-teams-settings"), { ...options.teams, providers: options.providers }));
+    if (id === "tools") cleanups.push(mountCapabilities(panel.querySelector("#capabilities-settings"), call));
+    if (id === "skills" && options.skills) cleanups.push(mountSkillsLibrary(panel.querySelector("#skills-library"), options.skills));
+    if (id === "cloud" && options.cloud) cleanups.push(mountCloudSettings(panel.querySelector("#cloud-settings"), options.cloud));
+    if (id === "about") {
+      cleanups.push(mountSupportDetails(panel.querySelector(".support-details")));
+      cleanups.push(mountAboutSettings(panel.querySelector(".settings-about")));
+      cleanups.push(mountResourceUsage(panel.querySelector(".settings-resources")));
+    }
+    if (id === "agents" && !discovered) void refresh();
+    for (const slot of panel.querySelectorAll("[data-embed]")) {
+      const embed = options.embed[slot.dataset.embed];
+      slot.innerHTML = '<p class="dialog-loading">Loading\u2026</p>';
+      embed(slot).then((cleanup) => {
+        if (disposed) cleanup();
+        else cleanups.push(cleanup);
+      }).catch(() => {
+        if (!disposed) slot.innerHTML = '<p class="settings-embed-error" role="alert">This section couldn\u2019t load. Close Settings and try again.</p>';
+      });
+    }
+  }
+  function show(id, focus = false) {
+    if (disposed) return;
+    tabs.forEach((tab) => {
+      const on = tab.dataset.section === id;
+      tab.setAttribute("aria-selected", String(on));
+      tab.tabIndex = on ? 0 : -1;
+    });
+    panels.forEach((panel, key) => {
+      panel.hidden = key !== id;
+    });
+    mountSection(id);
+    host.querySelector(".settings-content").scrollTop = 0;
+    if (focus) tabs.find((tab) => tab.dataset.section === id)?.focus({ preventScroll: true });
+  }
+  const click = (event) => {
+    const target = event.target instanceof Element ? event.target.closest("[data-section], [data-settings-close]") : null;
+    if (!target || !host.contains(target)) return;
+    if ("settingsClose" in target.dataset) {
+      options.close();
+      return;
+    }
+    show(target.dataset.section);
+  };
+  const keydown = (event) => {
+    const index = tabs.indexOf(event.target);
+    if (index < 0 || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + tabs.length) % tabs.length;
+    show(tabs[next].dataset.section, true);
+  };
+  updateProviders(options.providers);
+  host.addEventListener("click", click);
+  host.addEventListener("keydown", keydown);
+  refreshButton.addEventListener("click", refresh);
+  show(options.section ?? "general", true);
+  return {
+    show: (id) => show(id, true),
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      readinessCleanup.forEach((cleanup) => cleanup());
+      cleanups.forEach((cleanup) => cleanup());
+      host.removeEventListener("click", click);
+      host.removeEventListener("keydown", keydown);
+      refreshButton.removeEventListener("click", refresh);
+      host.replaceChildren();
+      host.classList.remove("settings-page-root");
+    }
+  };
+}
+export {
+  SECTIONS,
+  mountSettings
+};
